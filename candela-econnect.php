@@ -394,7 +394,7 @@ add_action( 'woocommerce_thankyou', function( $order_id ){
 
 });
 
-// update inventory
+// update inventory  every five mint
 function myprefix_custom_cron_schedule( $schedules ) {
     $schedules['5min'] = array(
         'interval' =>  5*60, // Every 6 hours
