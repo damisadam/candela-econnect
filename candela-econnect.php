@@ -15,6 +15,9 @@ function candela_econnect_register_settings() {
     add_option( 'timestamp', '');
     register_setting( 'candela_econnect_options_group', 'timestamp', 'candela_econnect_callback' );
 
+    add_option( 'inventory_timestamp', '');
+    register_setting( 'candela_econnect_options_group', 'inventory_timestamp', 'candela_econnect_callback' );
+
 
       add_option( 'app_id', '');
     register_setting( 'candela_econnect_options_group', 'app_id', 'candela_econnect_callback' );
@@ -38,7 +41,7 @@ add_action('admin_menu', 'candela_econnect_register_options_page');
  function candela_econnect_options_page()
 {
 
-   //postOrder(46676);
+   //postOrder(46682);
     //print_r(wp_cron());
     //creatProduct();
     updateInventory();
@@ -75,8 +78,13 @@ add_action('admin_menu', 'candela_econnect_register_options_page');
                 </tr>
 
                 <tr   valign="top">
-                    <th style="padding-top: 7px;" scope="row"><label for="app_url">Timestamp</label></th>
+                    <th style="padding-top: 7px;" scope="row"><label for="app_url">Product API last Run Timestamp</label></th>
                     <td><input type="text" id="timestamp" name="timestamp" value="<?php echo get_option('timestamp'); ?>" /></td>
+                </tr>
+
+                <tr   valign="top">
+                    <th style="padding-top: 7px;" scope="row"><label for="app_url">Inventory API last Run Timestamp</label></th>
+                    <td><input type="text" id="inventory_timestamp" name="inventory_timestamp" value="<?php echo get_option('inventory_timestamp'); ?>" /></td>
                 </tr>
 
             </table>
@@ -106,7 +114,7 @@ function creatProduct(){
     }else{
         $body = wp_remote_retrieve_body($response);
         $body=json_decode($body);
-        print_r($body);
+
         if($body->msg=="success"){
             echo  "<pre>";
             $products=$body->data;
@@ -233,7 +241,9 @@ function updateInventory(){
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
-    $timestamp=date('yy-m-d');
+    $inventory_timestamp=get_option('inventory_timestamp');
+    $timestamp=date('yy-m-d h:i:s A',strtotime($inventory_timestamp)-(5 * 60));
+    add_option( 'inventory_timestamp', $timestamp);
     //die($timestamp);
     $url= "{$app_url}/api/Inventory/ShopInventory?appid={$app_id}&appkey={$app_key}&ShopId={$shop_id}&TimeStamp={$timestamp}&isWebitem=1";
 
@@ -242,27 +252,33 @@ function updateInventory(){
             'method'     => 'GET',
         )
     );
-
+   // print_r($url);
     if(is_wp_error($response)){
         echo 'Error Found ( '.$response->get_error_message().' )';
     }else {
         $body = wp_remote_retrieve_body($response);
         $body = json_decode($body);
-        //print_r($body);
+       /* print_r($body);
+        die();*/
         if ($body->msg == "success") {
 
             $products = $body->data;
 
             foreach ($products as $product) {
-                $sku=$product->ProductCode;
+                $sku=$product->Product_code;
+                //print_r($product);
                // $sku=refineSku($sku);
+                //print_r($sku);
                 $product_id = wc_get_product_id_by_sku($sku);
                 if ($product_id) {
+
                     update_post_meta( $product_id, '_manage_stock', 'yes' );
                     update_post_meta($product_id, '_stock', $product->quantity-$product->Hold_Quantity);
                     update_post_meta($product_id, '_price', $product->Product_price);
                     update_post_meta( $product_id, '_regular_price', $product->Product_price );
                     update_post_meta( $product_id, '_sale_price', $product->Product_price );
+                    /*print_r($product);
+                    die($product_id);*/
                 }
 
             }
@@ -319,7 +335,7 @@ function postOrder($order_id){
     $data=[
         'appid'=>$app_id,
         'appKey'=>$app_key,
-        "OrderId"=> $order_id,
+        "OrderId"=> $order_id."8",
         "ShopId"=> $shop_id,
         "OrderDate"=> $order_date_created,
         "FirstName"=> $order_billing_first_name,
@@ -363,9 +379,9 @@ function postOrder($order_id){
 
 
         $order_products[]=[
-            "ProductCode"=> "MWS2017-MDM-BLK",
-            "ProductItemId"=> "44484",
-            "ItemName"=> $product_name,
+            "ProductCode"=> "MW00001-0XL-GRN",
+            "ProductItemId"=> "2610",
+            "ItemName"=> "Comfort Zone",
             "Qty"=> $product_qty,
             "ItemAmount"=> $sale_price,
             "DiscountPerc"=> 0,
@@ -386,6 +402,7 @@ function postOrder($order_id){
         'data_format' => 'body',
     ) );
     print_r($response);
+    print_r($data);
     //creatProduct();
 }
 add_action( 'woocommerce_thankyou', function( $order_id ){
