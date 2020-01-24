@@ -38,10 +38,10 @@ add_action('admin_menu', 'candela_econnect_register_options_page');
  function candela_econnect_options_page()
 {
 
-   //postOrder(46571);
+   //postOrder(46676);
     //print_r(wp_cron());
-    creatProduct();
-    //updateInventory();
+    //creatProduct();
+    updateInventory();
 
     ?>
     <div>
@@ -91,20 +91,22 @@ function creatProduct(){
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
-    $timestamp=get_option('timestamp');
-    $url= "{$app_url}/api/Products/Products?appid={$app_id}&appkey={$app_key}&timestamp={$timestamp}&&isWebItem=1";
+   // $timestamp=get_option('timestamp');
+    $timestamp=date('yy-m-d');
+    $url= "{$app_url}/api/Products/Products?appid={$app_id}&appkey={$app_key}&TimeStamp={$timestamp}&isWebItem=1";
 
     $response = wp_remote_get( $url,
         array(
             'method'     => 'GET',
         )
     );
+
     if(is_wp_error($response)){
         echo 'Error Found ( '.$response->get_error_message().' )';
     }else{
         $body = wp_remote_retrieve_body($response);
         $body=json_decode($body);
-        //print_r($body);
+        print_r($body);
         if($body->msg=="success"){
             echo  "<pre>";
             $products=$body->data;
@@ -231,19 +233,22 @@ function updateInventory(){
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
-
-    $url= "{$app_url}/api/Inventory/ShopInventory?appid={$app_id}&appkey={$app_key}";
+    $timestamp=date('yy-m-d');
+    //die($timestamp);
+    $url= "{$app_url}/api/Inventory/ShopInventory?appid={$app_id}&appkey={$app_key}&ShopId={$shop_id}&TimeStamp={$timestamp}&isWebitem=1";
 
     $response = wp_remote_get( $url,
         array(
             'method'     => 'GET',
         )
     );
+
     if(is_wp_error($response)){
         echo 'Error Found ( '.$response->get_error_message().' )';
     }else {
         $body = wp_remote_retrieve_body($response);
         $body = json_decode($body);
+        //print_r($body);
         if ($body->msg == "success") {
 
             $products = $body->data;
@@ -254,7 +259,7 @@ function updateInventory(){
                 $product_id = wc_get_product_id_by_sku($sku);
                 if ($product_id) {
                     update_post_meta( $product_id, '_manage_stock', 'yes' );
-                    update_post_meta($product_id, '_stock', $product->quantity);
+                    update_post_meta($product_id, '_stock', $product->quantity-$product->Hold_Quantity);
                     update_post_meta($product_id, '_price', $product->Product_price);
                     update_post_meta( $product_id, '_regular_price', $product->Product_price );
                     update_post_meta( $product_id, '_sale_price', $product->Product_price );
@@ -289,6 +294,7 @@ function postOrder($order_id){
     $order_data = $order->get_data(); // The Order data
 
 
+
     //Oder detail
     $order_date_created = $order_data['date_created']->date('Y-m-d H:i:s');
     $total_cost = $order_data['total'];
@@ -313,7 +319,7 @@ function postOrder($order_id){
     $data=[
         'appid'=>$app_id,
         'appKey'=>$app_key,
-        "OrderId"=> $order_id."2",
+        "OrderId"=> $order_id,
         "ShopId"=> $shop_id,
         "OrderDate"=> $order_date_created,
         "FirstName"=> $order_billing_first_name,
@@ -370,6 +376,7 @@ function postOrder($order_id){
     }
     $data['Products']=$order_products;
 
+   // print_r($data); die();
     //print_r(json_encode($data));
 
     $response = wp_remote_post( $url, array(
@@ -378,7 +385,7 @@ function postOrder($order_id){
         'method'      => 'POST',
         'data_format' => 'body',
     ) );
-    print_r($response['body']);
+    print_r($response);
     //creatProduct();
 }
 add_action( 'woocommerce_thankyou', function( $order_id ){
@@ -386,6 +393,8 @@ add_action( 'woocommerce_thankyou', function( $order_id ){
     postOrder($order_id);
 
 });
+
+// update inventory
 function myprefix_custom_cron_schedule( $schedules ) {
     $schedules['5min'] = array(
         'interval' =>  5*60, // Every 6 hours
@@ -405,8 +414,38 @@ add_filter( 'cron_schedules', 'myprefix_custom_cron_schedule' );
 add_action( 'my_task_hookss', 'my_task_hooks_function' );
 
 function my_task_hooks_function() {
+    updateInventory();
+    mail( 'sadam.hussain@nxb.com.pk', 'Automatic email my_task_hookss', 'Automatic scheduled email from WordPress. my_task_hooks_function');
+}
+
+
+
+
+
+// Product update every hour
+
+function product_custom_cron_schedule( $schedules ) {
+    $schedules['60min'] = array(
+        'interval' =>  5*60, // Every 6 hours
+        'display'  => __( 'Every 60 minute' ),
+    );
+    return $schedules;
+}
+
+
+add_filter( 'cron_schedules', 'product_custom_cron_schedule' );
+
+
+if ( ! wp_next_scheduled( 'product_task_hookss' ) ) {
+    wp_schedule_event( time(), '60min', 'product_task_hookss' );
+}
+
+
+
+add_action( 'product_task_hookss', 'product_task_hooks_function' );
+
+function product_task_hooks_function() {
 
     creatProduct();
-    updateInventory();
-    mail( 'sadam.hussain@nxb.com.pk', 'Automatic email my_task_hookss', 'Automatic scheduled email from WordPress.');
+    mail( 'sadam.hussain@nxb.com.pk', 'Automatic email my_task_hookss', 'Automatic scheduled email from WordPress. product_task_hooks_function');
 }
