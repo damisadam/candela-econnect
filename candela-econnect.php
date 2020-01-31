@@ -43,8 +43,8 @@ add_action('admin_menu', 'candela_econnect_register_options_page');
 
    //postOrder(46682);
     //print_r(wp_cron());
-    //creatProduct();
-    updateInventory();
+    creatProduct();
+   // updateInventory();
 
     ?>
     <div>
@@ -95,12 +95,15 @@ add_action('admin_menu', 'candela_econnect_register_options_page');
 }
 
 function creatProduct(){
+    @ini_set('upload_max_filesize' , '1024M' );
+    @ini_set('memory_limit' , '1024M' );
+    @ini_set('max_execution_time' , '5000' );
     $app_url=get_option('app_url');
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
-   // $timestamp=get_option('timestamp');
-    $timestamp=date('yy-m-d');
+    $timestamp=get_option('timestamp');
+    $timestamp=date('yy-m-d',strtotime($timestamp));
     $url= "{$app_url}/api/Products/Products?appid={$app_id}&appkey={$app_key}&TimeStamp={$timestamp}&isWebItem=1";
 
     $response = wp_remote_get( $url,
@@ -236,7 +239,9 @@ function creatProduct(){
 }
 
 function updateInventory(){
-
+    @ini_set('upload_max_filesize' , '1024M' );
+    @ini_set('memory_limit' , '1024M' );
+    @ini_set('max_execution_time' , '5000' );
     $app_url=get_option('app_url');
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
