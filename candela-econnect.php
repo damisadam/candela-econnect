@@ -1,5 +1,4 @@
 <?php
-//include('wp-config.php');
 /*
 Plugin Name: Candela E-connect
 Plugin URI: https://sadamhussain.com/
@@ -10,7 +9,6 @@ Text Domain: candela-econnect
 Version: 1.0
 */
 
-define( 'WP_DEBUG', true );
 function candela_econnect_register_settings() {
     add_option( 'timestamp', '');
     register_setting( 'candela_econnect_options_group', 'timestamp', 'candela_econnect_callback' );
@@ -19,7 +17,7 @@ function candela_econnect_register_settings() {
     register_setting( 'candela_econnect_options_group', 'inventory_timestamp', 'candela_econnect_callback' );
 
 
-      add_option( 'app_id', '');
+    add_option( 'app_id', '');
     register_setting( 'candela_econnect_options_group', 'app_id', 'candela_econnect_callback' );
 
     add_option( 'app_key', '');
@@ -38,17 +36,17 @@ function candela_econnect_register_options_page() {
 }
 add_action('admin_menu', 'candela_econnect_register_options_page');
 
- function candela_econnect_options_page()
+function candela_econnect_options_page()
 {
 
-   //postOrder(46682);
+    //postOrder(46682);
     //print_r(wp_cron());
-    creatProduct();
-   // updateInventory();
+    // creatProduct();
+    updateInventory();
 
     ?>
     <div>
-        <?php screen_icon();  ?>
+
 
         <h2>Candela API credential Options</h2>
 
@@ -103,7 +101,7 @@ function creatProduct(){
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
     $timestamp=get_option('timestamp');
-    $timestamp=date('yy-m-d',strtotime($timestamp));
+    //$timestamp=date('yy-m-d',strtotime($timestamp));
     $url= "{$app_url}/api/Products/Products?appid={$app_id}&appkey={$app_key}&TimeStamp={$timestamp}&isWebItem=1";
 
     $response = wp_remote_get( $url,
@@ -117,6 +115,8 @@ function creatProduct(){
     }else{
         $body = wp_remote_retrieve_body($response);
         $body=json_decode($body);
+        //print_r($body);
+        //die;
 
         if($body->msg=="success"){
             echo  "<pre>";
@@ -139,28 +139,39 @@ function creatProduct(){
 
 
                     // Cat
+
+                    $term_id=0;
                     if(!term_exists($product->Category, 'product_cat')){
                         $term = wp_insert_term($product->Category, 'product_cat');
-                        $term_id=$term['term_id'];
+                        if ( !is_wp_error($term) && isset( $term[ 'term_taxonomy_id' ] ) ) {
+                            $term_id=$term['term_id'];
+                        }
                     } else {
                         $term_s = get_term_by( 'name', $product->Category, 'product_cat' );
                         $term_id=$term_s->term_id;
                     }
+                    if($term_id!=0){
+                        wp_set_object_terms( $post_id, $term_id, 'product_cat');
+                    }
 
-                    wp_set_object_terms( $post_id, $term_id, 'product_cat');
 
+                    $term_id_sub=0;
                     if(!term_exists($product->SubCategory, 'product_cat')){
                         $term = wp_insert_term($product->SubCategory, 'product_cat',['parent'=>$term_id]);
-                        $term_id_sub=$term['term_id'];
+                        if ( !is_wp_error($term) && isset( $term[ 'term_taxonomy_id' ] ) ) {
+                            $term_id_sub=$term['term_id'];
+                        }
+
                     } else {
                         $term_s = get_term_by( 'name', $product->SubCategory, 'product_cat' );
                         $term_id_sub=$term_s->term_id;
                     }
+                    if($term_id_sub!==0 && $term_id!=0){
+                        wp_set_object_terms( $post_id,  [$term_id, $term_id_sub], 'product_cat',true);
 
-                    wp_set_object_terms( $post_id,  [$term_id, $term_id_sub], 'product_cat',true);
+                    }
 
-                    update_post_meta( $post_id, '_visibility', 'visible' );
-                    update_post_meta( $post_id, '_stock_status', 'instock');
+
                     update_post_meta( $post_id, '_sku', $sku);
 
                     $attributes=[
@@ -199,6 +210,7 @@ function creatProduct(){
 
                         update_post_meta( $post_id, '_product_attributes', $product_attributes);
                     }
+                    echo $sku. "added \n";
                     /*update_post_meta( $post_id, '_stock', 10 );
                     update_post_meta( $post_id, '_price', 200);
                     update_post_meta( $post_id, '_regular_price', 200 );
@@ -246,9 +258,9 @@ function updateInventory(){
     $app_id=get_option('app_id');
     $app_key=get_option('app_key');
     $shop_id=get_option('shop_id');
-    $inventory_timestamp=get_option('inventory_timestamp');
-    $timestamp=date('yy-m-d h:i:s A',strtotime($inventory_timestamp)-(5 * 60));
-    add_option( 'inventory_timestamp', $timestamp);
+    $timestamp=get_option('inventory_timestamp');
+    // $timestamp=date('yy-m-d h:i:s A',strtotime($timestamp)-(5 * 60));
+
     //die($timestamp);
     $url= "{$app_url}/api/Inventory/ShopInventory?appid={$app_id}&appkey={$app_key}&ShopId={$shop_id}&TimeStamp={$timestamp}&isWebitem=1";
 
@@ -257,14 +269,14 @@ function updateInventory(){
             'method'     => 'GET',
         )
     );
-   // print_r($url);
+    // print_r($url);
     if(is_wp_error($response)){
         echo 'Error Found ( '.$response->get_error_message().' )';
     }else {
         $body = wp_remote_retrieve_body($response);
         $body = json_decode($body);
-       /* print_r($body);
-        die();*/
+        //print_r($body);
+        //die();
         if ($body->msg == "success") {
 
             $products = $body->data;
@@ -272,18 +284,32 @@ function updateInventory(){
             foreach ($products as $product) {
                 $sku=$product->Product_code;
                 //print_r($product);
-               // $sku=refineSku($sku);
+                // $sku=refineSku($sku);
                 //print_r($sku);
-                $product_id = wc_get_product_id_by_sku($sku);
-                if ($product_id) {
+                $product_id=(int)$product->product_item_id;
+                $content_post= get_post($product_id);
+                // $product_id = wc_get_product_id_by_sku($sku);
+                if ($content_post) {
 
                     update_post_meta( $product_id, '_manage_stock', 'yes' );
                     update_post_meta($product_id, '_stock', $product->quantity-$product->Hold_Quantity);
                     update_post_meta($product_id, '_price', $product->Product_price);
                     update_post_meta( $product_id, '_regular_price', $product->Product_price );
                     update_post_meta( $product_id, '_sale_price', $product->Product_price );
+
+                    if(($product->quantity-$product->Hold_Quantity)>0) {
+                        update_post_meta($product_id, '_visibility', 'visible');
+                        update_post_meta($product_id, '_stock_status', 'instock');
+                    }else{
+                        update_post_meta($product_id, '_visibility', 'invisible');
+                        update_post_meta($product_id, '_stock_status', 'outofstock');
+                    }
                     /*print_r($product);
                     die($product_id);*/
+                    echo $sku. " Find \n";
+                }else{
+                    //print_r($product_id);
+                    echo "Not found \n";
                 }
 
             }
@@ -293,10 +319,10 @@ function updateInventory(){
 }
 function refineSku($sku){
     $sku= str_replace("-","",$sku);
-               $sku= str_replace("_","",$sku);
-               $sku= str_replace(".","",$sku);
+    $sku= str_replace("_","",$sku);
+    $sku= str_replace(".","",$sku);
 
-               return $sku;
+    return $sku;
 }
 
 function postOrder($order_id){
@@ -310,7 +336,7 @@ function postOrder($order_id){
     $order = wc_get_order( $order_id );
     /* $item = new WC_Order_Item_Product("#3081");
      $product = $item->get_product();*/
-    echo "<pre>";
+    //echo "<pre>";
 
     $order_data = $order->get_data(); // The Order data
 
@@ -384,9 +410,9 @@ function postOrder($order_id){
 
 
         $order_products[]=[
-            "ProductCode"=> "MW00001-0XL-GRN",
-            "ProductItemId"=> "2610",
-            "ItemName"=> "Comfort Zone",
+            "ProductCode"=> $product_code,
+            "ProductItemId"=> $product_id,
+            "ItemName"=> $product_name,
             "Qty"=> $product_qty,
             "ItemAmount"=> $sale_price,
             "DiscountPerc"=> 0,
@@ -397,7 +423,7 @@ function postOrder($order_id){
     }
     $data['Products']=$order_products;
 
-   // print_r($data); die();
+    // print_r($data); die();
     //print_r(json_encode($data));
 
     $response = wp_remote_post( $url, array(
@@ -411,7 +437,7 @@ function postOrder($order_id){
     //creatProduct();
 }
 add_action( 'woocommerce_thankyou', function( $order_id ){
-   // $order = new WC_Order( $order_id );
+    // $order = new WC_Order( $order_id );
     postOrder($order_id);
 
 });
@@ -427,9 +453,9 @@ function myprefix_custom_cron_schedule( $schedules ) {
 add_filter( 'cron_schedules', 'myprefix_custom_cron_schedule' );
 
 
-    if ( ! wp_next_scheduled( 'my_task_hookss' ) ) {
-        wp_schedule_event( time(), '5min', 'my_task_hookss' );
-    }
+if ( ! wp_next_scheduled( 'my_task_hookss' ) ) {
+    wp_schedule_event( time(), '5min', 'my_task_hookss' );
+}
 
 
 
@@ -437,7 +463,7 @@ add_action( 'my_task_hookss', 'my_task_hooks_function' );
 
 function my_task_hooks_function() {
     updateInventory();
-    mail( 'sadam.hussain@nxb.com.pk', 'Automatic email my_task_hookss', 'Automatic scheduled email from WordPress. my_task_hooks_function');
+
 }
 
 
@@ -469,5 +495,5 @@ add_action( 'product_task_hookss', 'product_task_hooks_function' );
 function product_task_hooks_function() {
 
     creatProduct();
-    mail( 'sadam.hussain@nxb.com.pk', 'Automatic email my_task_hookss', 'Automatic scheduled email from WordPress. product_task_hooks_function');
+
 }
